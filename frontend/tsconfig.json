@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "resolveJsonModule": true,
+    "strict": true,
+    "rootDir": "./src",
+    "outDir": "dist",
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "allowJs": true,
+    "declaration": true,
+    "declarationDir": "dist",
+    "emitDeclarationOnly": false,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+    "paths": {
+        "#assets/*": ["./assets/*"]
+    }
+  },
+  "types": ["vite/client"],
+  "include": ["src/frontend", "./src/declarations"],
+  "exclude": [
+    "**/src/**/*.test.ts",
+  ]
+}

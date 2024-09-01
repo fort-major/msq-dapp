@@ -1,0 +1,35 @@
+{
+  "canisters": {
+    "statistics": {
+      "candid": "backend/src/can_statistics/can.did",
+      "package": "statistics",
+      "type": "rust"
+    },
+    "payment_hub": {
+        "candid": "backend/src/can_payment_hub/can.did",
+        "package": "payment_hub",
+        "type": "rust"
+    },
+    "invoice_history": {
+        "candid": "backend/src/can_invoice_history/can.did",
+        "package": "invoice_history",
+        "type": "rust"
+    },
+    "msq_frontend": {
+      "build": [""],
+      "frontend": {
+        "entrypoint": "frontend/index.html"
+      },
+      "source": ["frontend/dist"],
+      "type": "assets"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
