@@ -35,7 +35,7 @@ interface IStatisticsUnwrapped {
 
 export function StatisticsPage() {
   const [stats] = createResource<IStatisticsUnwrapped | null>(async () => {
-    const agent = await makeAnonymousAgent(import.meta.env.VITE_MSQ_DFX_NETWORK_HOST);
+    const agent = await makeAnonymousAgent(import.meta.env.VITE_IC_HOST);
 
     const actor = createStatisticsBackendActor(agent);
     const statisticsHistory = await actor.get_stats();

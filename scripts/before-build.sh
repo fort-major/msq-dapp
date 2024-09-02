@@ -14,9 +14,7 @@ fi
 
 # check if canisters are created
 
-dfx canister --network=$network create statistics && \
-dfx canister --network=$network create payment_hub && \
-dfx canister --network=$network create invoice_history
+dfx canister --network=$network create statistics
 
 # put env vars into backend
 
@@ -25,8 +23,6 @@ rm -f $file_backend
 touch $file_backend
 
 echo "CAN_STATISTICS_CANISTER_ID=\"$(dfx canister --network=$network id statistics)\"" >> $file_backend
-echo "CAN_PAYMENT_HUB_CANISTER_ID=\"$(dfx canister --network=$network id payment_hub)\"" >> $file_backend
-echo "CAN_INVOICE_HISTORY_CANISTER_ID=\"$(dfx canister --network=$network id invoice_history)\"" >> $file_backend
 echo "CAN_ROOT_KEY=\"$(dfx ping $network | grep -oP '(?<="root_key": )\[.*\]')\"" >> $file_backend
 
 mkdir -p /tmp/msq
@@ -43,8 +39,6 @@ rm -f $file_frontend
 touch $file_frontend
 
 echo "VITE_STATISTICS_CANISTER_ID=\"$(dfx canister --network=$network id statistics)\"" >> $file_frontend
-echo "VITE_PAYMENT_HUB_CANISTER_ID=\"$(dfx canister --network=$network id payment_hub)\"" >> $file_frontend
-echo "VITE_INVOICE_HISTORY_CANISTER_ID=\"$(dfx canister --network=$network id invoice_history)\"" >> $file_frontend
 echo "VITE_ROOT_KEY=\"$(dfx ping $network | grep -oP '(?<="root_key": )\[.*\]')\"" >> $file_frontend
 
 if [ $mode = dev ]; then

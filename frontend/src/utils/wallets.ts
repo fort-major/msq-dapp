@@ -1,6 +1,6 @@
 import { InternalSnapClient, MsqClient, MsqIdentity, TMsqCreateOk } from "@fort-major/msq-client";
 import { PRE_LISTED_TOKENS, Principal, TAccountId } from "@fort-major/msq-shared";
-import { assertIs, getIcHostOrDefault, makeAgent, makeIcrc1Salt } from ".";
+import { assertIs, getIcHostOrDefault, makeAgent, makeIcrc1Salt, MSQ_SNAP_ID } from ".";
 import { Actor, HttpAgent, Identity } from "@dfinity/agent";
 import { AuthClient } from "@dfinity/auth-client";
 import { AccountIdentifier } from "@dfinity/ledger-icp";
@@ -45,11 +45,9 @@ type BitfinityProvider = {
 // so even for a payment flow it has no meaning
 export async function connectMSQWallet(): Promise<Result<InternalSnapClient, WalletError>> {
   const result = await MsqClient.create({
-    snapId: import.meta.env.VITE_MSQ_SNAP_ID,
-    snapVersion: import.meta.env.VITE_MSQ_SNAP_VERSION,
+    snapId: MSQ_SNAP_ID,
     shouldBeFlask: false,
-    debug: import.meta.env.VITE_MSQ_MODE === "DEV",
-    //forceReinstall: import.meta.env.VITE_MSQ_MODE === "DEV",
+    debug: import.meta.env.MODE === "dev",
     forceReinstall: false,
   });
 
@@ -72,7 +70,7 @@ export async function connectMSQWallet(): Promise<Result<InternalSnapClient, Wal
   const client = InternalSnapClient.create((result as TMsqCreateOk).Ok);
 
   const isAuthorized = await client.getInner().isAuthorized();
-  if (!isAuthorized) await client.login(window.location.origin, 0, import.meta.env.VITE_MSQ_SNAP_SITE_ORIGIN);
+  if (!isAuthorized) await client.login(window.location.origin, 0, window.location.origin);
 
   return { Ok: client };
 }
@@ -84,7 +82,7 @@ let accountId: TAccountId | undefined;
 export async function msqToIWallet(
   _client: InternalSnapClient,
   _assetId: string,
-  _accountId: TAccountId,
+  _accountId: TAccountId
 ): Promise<IWallet> {
   client = _client;
   assetId = _assetId;
@@ -97,7 +95,7 @@ export async function msqToIWallet(
     },
     getAccountId: async () => {
       return MsqIdentity.create(client!.getInner(), makeIcrc1Salt(assetId!, accountId!)).then((it) =>
-        AccountIdentifier.fromPrincipal({ principal: it.getPrincipal() }).toHex(),
+        AccountIdentifier.fromPrincipal({ principal: it.getPrincipal() }).toHex()
       );
     },
     createActor: async function <T extends Actor>(args: CreateActorArgs) {
@@ -185,10 +183,10 @@ export async function connectNNSWallet(): Promise<Result<IWallet, WalletError>> 
   try {
     await new Promise((res, rej) =>
       client.login({
-        identityProvider: import.meta.env.DEV ? "http://localhost:4444" : undefined,
+        identityProvider: import.meta.env.MODE === "dev" ? "http://localhost:4444" : undefined,
         onSuccess: res,
         onError: rej,
-      }),
+      })
     );
   } catch (e) {
     console.error(e);

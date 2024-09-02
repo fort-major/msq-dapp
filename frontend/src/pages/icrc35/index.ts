@@ -18,7 +18,7 @@ export function ICRC35Page() {
         kind: "blacklist",
         list: [],
       },
-      debug: import.meta.env.VITE_MSQ_MODE === "DEV",
+      debug: import.meta.env.MODE === "dev",
     });
 
     const disableHandlers = () => {

@@ -21,7 +21,7 @@
     }
   },
   "types": ["vite/client"],
-  "include": ["src/frontend", "./src/declarations"],
+  "include": ["src"],
   "exclude": [
     "**/src/**/*.test.ts",
   ]

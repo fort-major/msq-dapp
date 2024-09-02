@@ -1,12 +1,9 @@
 interface ImportMeta {
   env: {
-    DEV: boolean;
-    VITE_MSQ_SNAP_VERSION: string;
-    VITE_MSQ_SNAP_ID: string;
-    VITE_MSQ_SNAP_SITE_ORIGIN: string;
-    VITE_MSQ_DFX_NETWORK_HOST: string;
-    VITE_CANISTER_ID_MSQ_STATISTICS: string;
-    VITE_MSQ_MODE: "DEV" | "PROD";
+    MODE: "ic" | "dev";
+    VITE_STATISTICS_CANISTER_ID: string;
+    VITE_ROOT_KEY: string;
+    VITE_IC_HOST: string;
   };
 }
 
@@ -15,7 +12,7 @@ declare module "*.svg" {
   export default content;
 }
 
-enum QRCodeCorrectLevel {
+declare enum QRCodeCorrectLevel {
   L = 1,
   M = 0,
   Q = 3,

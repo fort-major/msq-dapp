@@ -14,7 +14,7 @@ import { Loader } from "./components/loader";
 import { NotificationBar } from "./components/notification-bar";
 import { AssetsStore } from "./store/assets";
 import { OriginDataStore } from "./store/origins";
-import { ROOT, findRoute, getSolidRoutes } from "./routes";
+import { findRoute, getSolidRoutes } from "./routes";
 import { IChildren } from "./utils";
 import { debugStringify, logError, TELEGRAM_LINK } from "@fort-major/msq-shared";
 import { ErrorPage } from "./pages/error";
@@ -25,9 +25,9 @@ import { ICRC35Store } from "./store/icrc-35";
 
 const root = document.getElementById("root");
 
-if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
+if (import.meta.env.MODE === "dev" && !(root instanceof HTMLElement)) {
   throw new Error(
-    "Root element not found. Did you forget to add it to your index.html? Or maybe the id attribute got misspelled?",
+    "Root element not found. Did you forget to add it to your index.html? Or maybe the id attribute got misspelled?"
   );
 }
 

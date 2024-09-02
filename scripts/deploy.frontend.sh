@@ -17,4 +17,4 @@ if ! [ -f $file_name ]; then
   echo "Env file for $mode does not exist."
 fi
 
-cd ./frontend/app && pnpm run build --mode=$mode && cd ../.. && dfx deploy --network=$network frontend
+cd ./frontend && pnpm run build --mode=$mode && cd .. && dfx deploy --network=$network frontend

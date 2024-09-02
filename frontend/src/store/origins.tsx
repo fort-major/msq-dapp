@@ -52,7 +52,7 @@ export function OriginDataStore(props: IChildren) {
     const fetchedAllOriginData = await msq.getAllOriginData(origins);
 
     // delete origin data of the msq site itself
-    delete fetchedAllOriginData[import.meta.env.VITE_MSQ_SNAP_SITE_ORIGIN];
+    delete fetchedAllOriginData[window.location.origin];
 
     setAllOriginData(fetchedAllOriginData);
     setFetching(false);
@@ -67,7 +67,7 @@ export function OriginDataStore(props: IChildren) {
     setAllOriginData(
       produce((a) => {
         a[origin]!.masks.push(newMask);
-      }),
+      })
     );
   };
 
@@ -90,7 +90,7 @@ export function OriginDataStore(props: IChildren) {
 
           const to = data[withOrigin]!;
           to.linksFrom = to.linksFrom.filter((link) => link !== origin);
-        }),
+        })
       );
     }
   };
@@ -110,7 +110,7 @@ export function OriginDataStore(props: IChildren) {
             const to = data[withOrigin]!;
             to.linksFrom = to.linksFrom.filter((link) => link !== origin);
           }
-        }),
+        })
       );
     }
   };

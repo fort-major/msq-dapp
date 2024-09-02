@@ -21,6 +21,8 @@ import { AccountIdentifier } from "@dfinity/ledger-icp";
 import { COLOR_BLACK, COLOR_ERROR_RED, FONT_WEIGHT_BOLD } from "../ui-kit";
 import { ROOT } from "../routes";
 
+export const MSQ_SNAP_ID = import.meta.env.MODE === "ic" ? "npm:@fort-major/msq" : "local:http://localhost:8081";
+
 // null = default
 // <string> = custom host
 export function setIcHost(host: string | null = null) {
@@ -39,11 +41,11 @@ export function getIcHost(): string | null {
 }
 
 export function getIcHostOrDefault(): string {
-  return getIcHost() || import.meta.env.VITE_MSQ_DFX_NETWORK_HOST;
+  return getIcHost() || import.meta.env.VITE_IC_HOST;
 }
 
 if (getIcHost() === null) {
-  setIcHost(import.meta.env.VITE_MSQ_DFX_NETWORK_HOST);
+  setIcHost(import.meta.env.VITE_IC_HOST);
 }
 
 (window as any).setIcHost = setIcHost;
@@ -108,7 +110,7 @@ export async function makeAgent(identity?: Identity | undefined, host?: string):
   if (host !== undefined) {
     icHost = host;
   } else {
-    icHost = storedHost === null ? import.meta.env.VITE_MSQ_DFX_NETWORK_HOST : storedHost;
+    icHost = storedHost === null ? import.meta.env.VITE_IC_HOST : storedHost;
   }
 
   const agent = new HttpAgent({ host: icHost, identity });
@@ -135,7 +137,7 @@ export interface IAssetMetadata {
 
 export async function getAssetMetadata(
   ledger: IcrcLedgerCanister,
-  certified: boolean = false,
+  certified: boolean = false
 ): Promise<IAssetMetadata> {
   const cachedMetadata = getCachedAssetMetadata(ledger.canisterId);
   if (cachedMetadata) return Promise.resolve(cachedMetadata);
@@ -240,9 +242,9 @@ export function createPaymentLink(
   recipientPrincipal: string,
   amount?: bigint,
   recipientSubaccount?: string,
-  memo?: string,
+  memo?: string
 ): URL {
-  const baseUrl = new URL(ROOT["/"].integration["/"].pay.path, import.meta.env.VITE_MSQ_SNAP_SITE_ORIGIN);
+  const baseUrl = new URL(ROOT["/"].integration["/"].pay.path, window.location.origin);
   const params = baseUrl.searchParams;
 
   if (amount) {
@@ -291,7 +293,7 @@ try {
       get: function () {
         supportsPassive = true;
       },
-    }),
+    })
   );
 } catch (e) {}
 

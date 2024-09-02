@@ -13,5 +13,3 @@ function generate_did() {
 cargo fix --all --allow-dirty
 
 generate_did "statistics"
-generate_did "payment_hub"
-generate_did "invoice_history"

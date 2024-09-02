@@ -1,10 +1,5 @@
 [workspace]
-members = [
-    "backend/src/can_statistics",
-    "backend/src/can_payment_hub",
-    "backend/src/can_invoice_history",
-    "backend/src/shared",
-]
+members = ["backend/src/can_statistics", "backend/src/shared"]
 resolver = "2"
 
 [profile.release]

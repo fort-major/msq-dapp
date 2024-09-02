@@ -1,16 +1,11 @@
 type Data = record {
-    login: nat32;
-    transfer: nat32;
-    origin_link: nat32;
-    origin_unlink: nat32;
+  origin_link : nat32;
+  login : nat32;
+  origin_unlink : nat32;
+  transfer : nat32;
 };
-
-type Statistics = record {
-    timestamp : nat64;
-    data : Data;
-};
-
-service : {
-    "increment_stats" : (Data) -> ();
-    "get_stats" : () -> (vec Statistics) query;
-};
+type Statistics = record { data : Data; timestamp : nat64 };
+service : () -> {
+  get_stats : () -> (vec Statistics) query;
+  increment_stats : (Data) -> ();
+}
