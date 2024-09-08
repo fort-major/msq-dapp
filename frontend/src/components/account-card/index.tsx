@@ -22,14 +22,16 @@ import {
   AccountCardWrapper,
   DotsIcon,
 } from "./style";
-import { Match, Show, Switch, createSignal } from "solid-js";
+import { Match, Show, Switch, createMemo, createSignal } from "solid-js";
 import { Input } from "../../ui-kit/input";
 import { Button, EButtonKind } from "../../ui-kit/button";
 import { EIconKind, Icon } from "../../ui-kit/icon";
 import { ColorGray150, H5, StrikedText, Text } from "../../ui-kit/typography";
-import { COLOR_ACCENT, COLOR_GRAY_140 } from "../../ui-kit";
+import { COLOR_ACCENT, COLOR_GRAY_125, COLOR_GRAY_140 } from "../../ui-kit";
 import { TThirdPartyWalletKind } from "../../store/wallets";
 import { Block, Img } from "../markup";
+import { useAssetData } from "../../store/assets";
+import { EDs } from "../../utils/e8s";
 
 export interface IAccountCardProps {
   accountId: TAccountId;
@@ -55,7 +57,21 @@ export interface IAccountCardProps {
 }
 
 export function AccountCard(props: IAccountCardProps) {
+  const { sonicUsdExchangeRates } = useAssetData();
+
   const [edited, setEdited] = createSignal(false);
+
+  const usdBalance = createMemo(() => {
+    const rate = sonicUsdExchangeRates[props.symbol];
+    if (!rate) return undefined;
+
+    const b = props.balance;
+    if (!b) return undefined;
+
+    const bEds = EDs.new(b, props.decimals);
+
+    return bEds.toDecimals(8).toE8s().mul(rate);
+  });
 
   const handleEditStart = eventHandler((e: Event) => {
     if (props.onEdit === undefined) return;
@@ -88,7 +104,7 @@ export function AccountCard(props: IAccountCardProps) {
     <AccountCardWrapper classList={props.classList} onClick={handleClick} fullWidth={props.fullWidth}>
       <AccountCardHeaderWrapper>
         <Show when={props.showWalletKindLogo}>
-          <Img src={`/assets/${props.showWalletKindLogo!.toLowerCase()}-wallet.png`} w="40px" h="40px" rounded />
+          <Img src={`/${props.showWalletKindLogo!.toLowerCase()}-wallet.png`} w="40px" h="40px" rounded />
         </Show>
         <AccountCardHeader>
           <Switch>
@@ -146,25 +162,37 @@ export function AccountCard(props: IAccountCardProps) {
         <AccountCardFooterContent>
           <AccountCardFooterBalanceWrapper>
             <AccountCardFooterBalance>
-              <Show
-                when={props.transferSuccess}
-                fallback={<H5>{tokensToStr(props.balance || 0n, props.decimals, undefined, true)}</H5>}
-              >
-                <H5>
-                  <span style={{ display: "flex", gap: "15px", "align-items": "center" }}>
-                    <span classList={{ [StrikedText]: true, [ColorGray150]: true }}>
-                      {tokensToStr(props.balance || 0n, props.decimals, undefined, true)}
+              <Switch>
+                <Match when={props.transferSuccess}>
+                  <H5>
+                    <span style={{ display: "flex", gap: "15px", "align-items": "center" }}>
+                      <span classList={{ [StrikedText]: true, [ColorGray150]: true }}>
+                        {tokensToStr(props.balance || 0n, props.decimals, undefined, true)}
+                      </span>
+
+                      <Icon kind={EIconKind.ArrowRightWide} color={COLOR_ACCENT} />
+
+                      <span>
+                        {tokensToStr(props.balance! - props.transferSuccess!, props.decimals, undefined, true)}
+                      </span>
                     </span>
-
-                    <Icon kind={EIconKind.ArrowRightWide} color={COLOR_ACCENT} />
-
-                    <span>{tokensToStr(props.balance! - props.transferSuccess!, props.decimals, undefined, true)}</span>
-                  </span>
-                </H5>
-              </Show>
-              <Text size={12} weight={600}>
-                {props.symbol}
-              </Text>
+                  </H5>
+                </Match>
+                <Match when={!props.transferSuccess && !usdBalance()}>
+                  <H5>{tokensToStr(props.balance || 0n, props.decimals, undefined, true)}</H5>
+                  <Text size={12} weight={600}>
+                    {props.symbol}
+                  </Text>
+                </Match>
+                <Match when={!props.transferSuccess && usdBalance()}>
+                  <div class="flex flex-col gap-1">
+                    <Text size={16} weight={500} color={COLOR_GRAY_125}>
+                      {tokensToStr(props.balance || 0n, props.decimals, undefined, true)} {props.symbol}
+                    </Text>
+                    <H5>${usdBalance()!.toDynamic().toDecimals(4).toString()}</H5>
+                  </div>
+                </Match>
+              </Switch>
             </AccountCardFooterBalance>
             <Show when={props.targetBalance && (props.balance || 0n) < props.targetBalance}>
               <AccountCardFooterInsufficientBalance>

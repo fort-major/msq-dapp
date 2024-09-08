@@ -62,7 +62,7 @@ export function MyAssetsPage() {
   createEffect(
     on(msqClient, (msq) => {
       if (msq) init();
-    }),
+    })
   );
 
   const handleNewAssetIdInput = eventHandler(async (e: Event & { target: HTMLInputElement }) => {
@@ -251,7 +251,7 @@ export function MyAssetsPage() {
                           assets[assetId]!.totalBalance,
                           assetMetadata[assetId]!.metadata!.decimals,
                           undefined,
-                          true,
+                          true
                         )}{" "}
                         <span class={ColorGray130}>{assetMetadata[assetId]!.metadata!.symbol}</span>
                       </Text>
@@ -287,7 +287,7 @@ export function MyAssetsPage() {
                         handleAddAccount(
                           assetId,
                           assetMetadata[assetId]!.metadata!.name,
-                          assetMetadata[assetId]!.metadata!.symbol,
+                          assetMetadata[assetId]!.metadata!.symbol
                         )
                       }
                       symbol={assetMetadata[assetId]!.metadata!.symbol}

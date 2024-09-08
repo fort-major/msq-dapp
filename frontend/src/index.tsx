@@ -1,5 +1,6 @@
 (window as any).global = window;
 
+import "./index.css";
 import "./ui-kit/index";
 
 /* @refresh reload */
@@ -22,6 +23,7 @@ import { EIconKind } from "./ui-kit/icon";
 import { ContactUsBtn } from "./components/contact-us-btn";
 import { ThirdPartyWalletStore } from "./store/wallets";
 import { ICRC35Store } from "./store/icrc-35";
+import { MsqPayStore } from "./store/msq-pay";
 
 const root = document.getElementById("root");
 
@@ -65,24 +67,26 @@ export function App(props: IChildren) {
   try {
     return (
       <GlobalStore>
-        <AssetsStore>
-          <ThirdPartyWalletStore>
-            <OriginDataStore>
-              <ICRC35Store>
-                <Root>
-                  <Page barVisible={barVisible()}>
-                    <NotificationBar barVisible={barVisible()} />
-                    <Header />
-                    {props.children}
-                  </Page>
-                  <LoaderWrapper />
-                  <Toaster />
-                  <ContactUsBtn />
-                </Root>
-              </ICRC35Store>
-            </OriginDataStore>
-          </ThirdPartyWalletStore>
-        </AssetsStore>
+        <MsqPayStore>
+          <AssetsStore>
+            <ThirdPartyWalletStore>
+              <OriginDataStore>
+                <ICRC35Store>
+                  <Root>
+                    <Page barVisible={barVisible()}>
+                      <NotificationBar barVisible={barVisible()} />
+                      <Header />
+                      {props.children}
+                    </Page>
+                    <LoaderWrapper />
+                    <Toaster />
+                    <ContactUsBtn />
+                  </Root>
+                </ICRC35Store>
+              </OriginDataStore>
+            </ThirdPartyWalletStore>
+          </AssetsStore>
+        </MsqPayStore>
       </GlobalStore>
     );
   } catch (e) {

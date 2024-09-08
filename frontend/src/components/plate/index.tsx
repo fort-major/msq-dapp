@@ -1,12 +1,20 @@
 import { styled } from "solid-styled-components";
 import { COLOR_GRAY_105, COLOR_GRAY_115 } from "../../ui-kit";
 
-export const Plate = styled.div<{ row?: boolean; gap?: string; pointer?: boolean; bgHover?: boolean }>`
+export const Plate = styled.div<{
+  bg?: string;
+  p?: string;
+  row?: boolean;
+  gap?: string;
+  pointer?: boolean;
+  bgHover?: boolean;
+}>`
   display: flex;
   flex-flow: ${(props) => (props.row ? "row" : "column")};
-  padding: 15px;
+  padding: ${(props) => props.p ?? "15px"};
   gap: ${(props) => (props.gap ? props.gap : "15px")};
 
+  background: ${(props) => props.bg ?? "unset"};
   border: 1px solid ${COLOR_GRAY_115};
   border-radius: 25px;
 

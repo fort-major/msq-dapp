@@ -9,6 +9,7 @@ import {
   ErrorInvalidPaymentRequestPage,
   ErrorMSQConnectionRejectedPage,
   ErrorMobileNotSupportedPage,
+  ErrorMsqPayInvoiceNotFoundPage,
   ErrorUnblockMsqPage,
 } from "./pages/error";
 import { ICRC35Page } from "./pages/icrc35";
@@ -125,6 +126,9 @@ export const ROOT = route({
         }),
         "bad-payment-request": route({
           component: ErrorInvalidPaymentRequestPage,
+        }),
+        "invoice-not-found": route({
+          component: ErrorMsqPayInvoiceNotFoundPage,
         }),
         "bad-login-request": route({
           component: ErrorInvalidLoginRequestPage,

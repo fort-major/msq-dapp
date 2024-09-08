@@ -58,7 +58,7 @@ export function StatisticsPage() {
           result.login.last.m === date.getMonth() &&
           result.login.last.y === date.getFullYear()
         ) {
-          result.login.datasets[0].data[result.login.datasets[0].data.length] += episode.data.login;
+          result.login.datasets[0].data[result.login.datasets[0].data.length - 1] += episode.data.login;
         } else {
           result.login.last = { m: date.getMonth(), y: date.getFullYear() };
           result.login.labels.push(label);
@@ -72,7 +72,7 @@ export function StatisticsPage() {
           result.transfer.last.m === date.getMonth() &&
           result.transfer.last.y === date.getFullYear()
         ) {
-          result.transfer.datasets[0].data[result.transfer.datasets[0].data.length] += episode.data.transfer;
+          result.transfer.datasets[0].data[result.transfer.datasets[0].data.length - 1] += episode.data.transfer;
         } else {
           result.transfer.last = { m: date.getMonth(), y: date.getFullYear() };
           result.transfer.labels.push(label);
@@ -86,7 +86,8 @@ export function StatisticsPage() {
           result.origin_link.last.m === date.getMonth() &&
           result.origin_link.last.y === date.getFullYear()
         ) {
-          result.origin_link.datasets[0].data[result.origin_link.datasets[0].data.length] += episode.data.origin_link;
+          result.origin_link.datasets[0].data[result.origin_link.datasets[0].data.length - 1] +=
+            episode.data.origin_link;
         } else {
           result.origin_link.last = { m: date.getMonth(), y: date.getFullYear() };
           result.origin_link.labels.push(label);
@@ -100,7 +101,7 @@ export function StatisticsPage() {
           result.origin_unlink.last.m === date.getMonth() &&
           result.origin_unlink.last.y === date.getFullYear()
         ) {
-          result.origin_unlink.datasets[0].data[result.origin_unlink.datasets[0].data.length] +=
+          result.origin_unlink.datasets[0].data[result.origin_unlink.datasets[0].data.length - 1] +=
             episode.data.origin_unlink;
         } else {
           result.origin_unlink.last = { m: date.getMonth(), y: date.getFullYear() };
@@ -115,6 +116,7 @@ export function StatisticsPage() {
 
   const chartOptions = {
     responsive: false,
+    borderColor: "white",
   };
 
   return (

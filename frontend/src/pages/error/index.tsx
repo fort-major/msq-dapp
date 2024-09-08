@@ -165,6 +165,15 @@ export function ErrorInvalidPaymentRequestPage() {
   );
 }
 
+export function ErrorMsqPayInvoiceNotFoundPage() {
+  return (
+    <ErrorPage
+      header="Invoice not found"
+      text="Seems like it took you too long to complete the payment. Repeat the payment process from the start or try contacting the seller."
+    />
+  );
+}
+
 export function ErrorInvalidLoginRequestPage() {
   return (
     <ErrorPage

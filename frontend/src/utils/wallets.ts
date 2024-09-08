@@ -1,6 +1,6 @@
 import { InternalSnapClient, MsqClient, MsqIdentity, TMsqCreateOk } from "@fort-major/msq-client";
 import { PRE_LISTED_TOKENS, Principal, TAccountId } from "@fort-major/msq-shared";
-import { assertIs, getIcHostOrDefault, makeAgent, makeIcrc1Salt, MSQ_SNAP_ID } from ".";
+import { assertIs, getIcHostOrDefault, makeAgent, makeIcrc1Salt, MSQ_ORIGIN, MSQ_SNAP_ID } from ".";
 import { Actor, HttpAgent, Identity } from "@dfinity/agent";
 import { AuthClient } from "@dfinity/auth-client";
 import { AccountIdentifier } from "@dfinity/ledger-icp";
@@ -49,6 +49,7 @@ export async function connectMSQWallet(): Promise<Result<InternalSnapClient, Wal
     shouldBeFlask: false,
     debug: import.meta.env.MODE === "dev",
     forceReinstall: false,
+    msqOrigin: MSQ_ORIGIN,
   });
 
   if ("MSQConnectionRejected" in result) {

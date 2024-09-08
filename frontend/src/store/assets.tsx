@@ -1,4 +1,4 @@
-import { createStore, produce } from "solid-js/store";
+import { createStore, produce, Store } from "solid-js/store";
 import { useMsqClient } from "./global";
 import { Accessor, Setter, createContext, createSignal, onCleanup, onMount, useContext } from "solid-js";
 import {
@@ -7,18 +7,22 @@ import {
   IChildren,
   ONE_MIN_MS,
   getAssetMetadata,
+  getIcHostOrDefault,
   makeAgent,
   makeAnonymousAgent,
   makeIcrc1Salt,
+  nowNs,
 } from "../utils";
 import { IcrcLedgerCanister } from "@dfinity/ledger-icrc";
 import { Principal } from "@dfinity/principal";
 import { MsqIdentity } from "@fort-major/msq-client";
 import { PRE_LISTED_TOKENS, TAccountId, delay, unreacheable } from "@fort-major/msq-shared";
-import { AnonymousIdentity } from "@dfinity/agent";
+import { Actor, ActorMethod, AnonymousIdentity } from "@dfinity/agent";
 import { useNavigate } from "@solidjs/router";
 import { ROOT } from "../routes";
 import { TThirdPartyWalletKind } from "./wallets";
+import { E8s } from "../utils/e8s";
+import { newMsqPayActor, newSonicInfoActor, SonicInfoActor } from "../backend";
 
 export type IAssetDataExt = {
   accounts: {
@@ -38,6 +42,9 @@ export type IAssetMetadataExt = {
 export type AllAssetData = Partial<Record<string, IAssetDataExt>>;
 export type AllAssetMetadata = Partial<Record<string, IAssetMetadataExt>>;
 
+export type TPrincipalIdStr = string;
+export type TTokenSymbol = string;
+
 export interface IAssetDataStore {
   assets: AllAssetData;
   assetMetadata: AllAssetMetadata;
@@ -45,7 +52,7 @@ export interface IAssetDataStore {
   initThirdPartyAccountInfo: (
     walletKind: TThirdPartyWalletKind,
     accountPrincipalId: string,
-    assetIds: string[],
+    assetIds: string[]
   ) => void;
   fetchAccountInfo: (assetIds?: string[]) => Promise<boolean[] | undefined>;
   fetchMetadata: (assetIds?: string[]) => Promise<void>;
@@ -54,6 +61,9 @@ export interface IAssetDataStore {
   editAccount: (assetId: string, accountId: TAccountId, newName: string) => Promise<void>;
   addAsset: (assetId: string) => Promise<void>;
   removeAssetLogo: (assetId: string) => void;
+
+  sonicUsdExchangeRates: Store<Partial<Record<TTokenSymbol, E8s>>>;
+  fetchSonicUsdExchangeRates: () => Promise<void>;
 }
 
 const AssetDataContext = createContext<IAssetDataStore>();
@@ -78,17 +88,20 @@ const PRE_DEFINED_ASSETS: { assetId: string; name: string; symbol: string; decim
   }));
 
 export function AssetsStore(props: IChildren) {
+  const _msq = useMsqClient();
+  const navigate = useNavigate();
+
   const [allAssetData, setAllAssetData] = createStore<AllAssetData>();
   const [allAssetMetadata, setAllAssetMetadata] = createStore<AllAssetMetadata>();
   const [refreshPeriodically, setRefreshPeriodically] = createSignal(true);
   const [initialized, setInitialized] = createSignal(false);
-  const _msq = useMsqClient();
-  const navigate = useNavigate();
+  const [sonicUsdExchangeRates, setSonicUsdExchangeRates] = createStore<IAssetDataStore["sonicUsdExchangeRates"]>();
 
   onMount(async () => {
     while (refreshPeriodically()) {
-      await delay(ONE_MIN_MS);
+      fetchSonicUsdExchangeRates();
 
+      await delay(ONE_MIN_MS);
       if (_msq()) await refreshBalances();
     }
   });
@@ -106,6 +119,17 @@ export function AssetsStore(props: IChildren) {
     await fetchMetadata();
     await refreshBalances();
     setInitialized(true);
+  };
+
+  const fetchSonicUsdExchangeRates: IAssetDataStore["fetchSonicUsdExchangeRates"] = async () => {
+    const actor = await newSonicInfoActor();
+    const entries = await actor.getAllTokens();
+
+    for (let entry of entries) {
+      const rate = E8s.fromFloat(entry.priceUSD);
+
+      setSonicUsdExchangeRates(entry.symbol, rate);
+    }
   };
 
   const addPredefinedAssets = async () => {
@@ -144,6 +168,7 @@ export function AssetsStore(props: IChildren) {
     const allAssetDataKeys = Object.keys(fetchedAllAssetData);
 
     const result: boolean[] | undefined = assetIds?.map((_) => false);
+    const futures = [];
 
     for (let idx = 0; idx < allAssetDataKeys.length; idx++) {
       const key = allAssetDataKeys[idx];
@@ -160,12 +185,18 @@ export function AssetsStore(props: IChildren) {
         totalBalance: BigInt(0),
       });
 
-      MsqIdentity.create(msq.getInner(), makeIcrc1Salt(key, idx)).then((identity) => {
-        const principal = identity.getPrincipal();
+      for (let accountId = 0; accountId < accounts.length; accountId++) {
+        const f = MsqIdentity.create(msq.getInner(), makeIcrc1Salt(key, accountId)).then((identity) => {
+          const principal = identity.getPrincipal();
 
-        setAllAssetData(key, "accounts", idx, { principal: principal.toText() });
-      });
+          setAllAssetData(key, "accounts", accountId, { principal: principal.toText() });
+        });
+
+        futures.push(f);
+      }
     }
+
+    await Promise.all(futures);
 
     setAllAssetData(allAssetData);
 
@@ -175,7 +206,7 @@ export function AssetsStore(props: IChildren) {
   const initThirdPartyAccountInfo = async (
     walletKind: TThirdPartyWalletKind,
     accountPrincipalId: string,
-    assetIds: string[],
+    assetIds: string[]
   ) => {
     const allAssetData = assetIds.reduce(
       (prev, cur) =>
@@ -192,7 +223,7 @@ export function AssetsStore(props: IChildren) {
             ],
           },
         }),
-      {},
+      {}
     );
 
     setAllAssetData(allAssetData);
@@ -200,7 +231,7 @@ export function AssetsStore(props: IChildren) {
 
   // fetches the Metadata of the provided assets
   const fetchMetadata = async (assetIds?: string[]) => {
-    const agent = await makeAnonymousAgent();
+    const agent = await makeAnonymousAgent(getIcHostOrDefault());
 
     if (!assetIds) assetIds = Object.keys(allAssetData);
 
@@ -231,9 +262,11 @@ export function AssetsStore(props: IChildren) {
 
   // fetches balances of the wallet accounts for the specified assets
   const refreshBalances = async (assetIds?: string[]) => {
-    const agent = await makeAnonymousAgent();
+    const agent = await makeAnonymousAgent(getIcHostOrDefault());
 
-    if (!assetIds) assetIds = Object.keys(allAssetData);
+    if (!assetIds) {
+      assetIds = Object.keys(allAssetData);
+    }
 
     for (let assetId of assetIds) {
       const ledger = IcrcLedgerCanister.create({ agent, canisterId: Principal.fromText(assetId) });
@@ -242,7 +275,7 @@ export function AssetsStore(props: IChildren) {
 
       for (let idx = 0; idx < allAssetData[assetId]!.accounts.length; idx++) {
         updateBalanceOf(ledger, assetId, idx).catch((e) => {
-          console.log(e);
+          console.error(e);
 
           setAllAssetData(assetId, "erroed", true);
         });
@@ -295,7 +328,7 @@ export function AssetsStore(props: IChildren) {
           ],
           erroed: false,
         };
-      }),
+      })
     );
     setAllAssetMetadata(assetId, { metadata: undefined, erroed: false });
 
@@ -332,7 +365,7 @@ export function AssetsStore(props: IChildren) {
       setAllAssetData(
         produce((state) => {
           state[assetId]!.accounts[0].name = assetData[0].accounts[0];
-        }),
+        })
       );
 
       setAllAssetMetadata(assetId, "metadata", metadata);
@@ -376,7 +409,7 @@ export function AssetsStore(props: IChildren) {
         const totalBalance = state[assetId]!.accounts!.reduce((prev, cur) => prev + (cur.balance || 0n), 0n);
 
         state[assetId]!.totalBalance = totalBalance;
-      }),
+      })
     );
 
     // then we update to be sure
@@ -391,7 +424,7 @@ export function AssetsStore(props: IChildren) {
         const totalBalance = state[assetId]!.accounts!.reduce((prev, cur) => prev + (cur.balance || 0n), 0n);
 
         state[assetId]!.totalBalance = totalBalance;
-      }),
+      })
     );
   };
 
@@ -413,6 +446,9 @@ export function AssetsStore(props: IChildren) {
         editAccount,
         addAsset,
         removeAssetLogo,
+
+        sonicUsdExchangeRates,
+        fetchSonicUsdExchangeRates,
       }}
     >
       {props.children}

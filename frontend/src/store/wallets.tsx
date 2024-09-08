@@ -18,6 +18,7 @@ interface IThirdPartyWalletsContext {
   initWallet: InitWalletFunc;
   setWalletAccount: SetWalletAccountFunc;
   connectedWallet: Accessor<ConnectedWalletStore>;
+  connectedWalletIsThirdParty: Accessor<boolean>;
 }
 
 const ThirdPartyWalletsContext = createContext<IThirdPartyWalletsContext>();
@@ -36,10 +37,20 @@ export function ThirdPartyWalletStore(props: IChildren) {
   const msq = useMsqClient();
   const connectMsq = useConnectMsq();
   const [connectedWallet, setConnectedWallet] = createSignal<ConnectedWalletStore>();
-  const { init, initThirdPartyAccountInfo, refreshBalances } = useAssetData();
+  const { init, initThirdPartyAccountInfo, refreshBalances, fetchMetadata } = useAssetData();
 
   const disconnectWallet = () => {
     setConnectedWallet(undefined);
+  };
+
+  const connectedWalletIsThirdParty: IThirdPartyWalletsContext["connectedWalletIsThirdParty"] = () => {
+    const connected = connectedWallet();
+
+    // not entirely true, but will work for now
+    if (!connected) return true;
+    const [kind, _] = connected;
+
+    return kind === "NNS" || kind === "Plug";
   };
 
   const connectWallet: ConnectWalletFunc = async (kind) => {
@@ -87,6 +98,8 @@ export function ThirdPartyWalletStore(props: IChildren) {
     } else {
       const prin = await (wallet! as IWallet).getPrincipal();
       initThirdPartyAccountInfo(kind, prin.toText(), assetIds);
+
+      fetchMetadata(assetIds);
       refreshBalances(assetIds);
     }
   };
@@ -108,7 +121,14 @@ export function ThirdPartyWalletStore(props: IChildren) {
 
   return (
     <ThirdPartyWalletsContext.Provider
-      value={{ disconnectWallet, connectWallet, connectedWallet, setWalletAccount, initWallet }}
+      value={{
+        disconnectWallet,
+        connectWallet,
+        connectedWallet,
+        setWalletAccount,
+        initWallet,
+        connectedWalletIsThirdParty,
+      }}
     >
       {props.children}
     </ThirdPartyWalletsContext.Provider>

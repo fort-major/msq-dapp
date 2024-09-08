@@ -16,7 +16,7 @@ export const PaymentPageWrapper = styled.div`
 `;
 
 export const PaymentPageHeading = styled.div`
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 15px;

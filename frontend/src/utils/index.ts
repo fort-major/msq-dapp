@@ -7,6 +7,7 @@ import {
   PRE_LISTED_TOKENS,
   Principal,
   TAccountId,
+  bigIntToBytes,
   debugStringify,
   err,
   fromCBOR,
@@ -21,6 +22,7 @@ import { AccountIdentifier } from "@dfinity/ledger-icp";
 import { COLOR_BLACK, COLOR_ERROR_RED, FONT_WEIGHT_BOLD } from "../ui-kit";
 import { ROOT } from "../routes";
 
+export const MSQ_ORIGIN = import.meta.env.MODE === "ic" ? "https://msq.tech" : "http://localhost:8000";
 export const MSQ_SNAP_ID = import.meta.env.MODE === "ic" ? "npm:@fort-major/msq" : "local:http://localhost:8081";
 
 // null = default
@@ -115,7 +117,7 @@ export async function makeAgent(identity?: Identity | undefined, host?: string):
 
   const agent = new HttpAgent({ host: icHost, identity });
 
-  if (icHost) {
+  if (host) {
     await agent.fetchRootKey();
   }
 
@@ -429,6 +431,10 @@ export function toastErr(msg: string) {
   });
 }
 
+export function nowNs() {
+  return BigInt(Date.now()) * 1_000_000n;
+}
+
 // ---------- SECURITY RELATED STUFF ------------
 
 export function eventHandler<E extends Event>(fn: (e: E) => void | Promise<void>) {
@@ -440,10 +446,18 @@ export function eventHandler<E extends Event>(fn: (e: E) => void | Promise<void>
       err(ErrorCode.SECURITY_VIOLATION, "No automation allowed!");
     }
 
-    Promise.resolve(fn(e)).catch((e) => err(ErrorCode.UNKOWN, debugStringify(e)));
+    Promise.resolve(fn(e));
   };
 }
 
 export function makeIcrc1Salt(assetId: string, accountId: TAccountId): Uint8Array {
   return strToBytes(`\xacicrc1\n${assetId}\n${accountId}`);
 }
+
+export const MEMO_GENERATION_DOMAIN = strToBytes("msq-memo_generation");
+
+export const calcInvoiceMemo = async (invoiceId: Uint8Array): Promise<Uint8Array> => {
+  const buf = new Uint8Array([...MEMO_GENERATION_DOMAIN, ...invoiceId]);
+
+  return await crypto.subtle.digest("SHA-256", buf).then((it) => new Uint8Array(it));
+};

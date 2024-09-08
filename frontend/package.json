@@ -7,13 +7,18 @@
   "license": "MIT",
   "scripts": {
     "build": "vite build",
-    "dev": "vite --mode dev",
+    "dev": "vite --mode dev --port 8000",
     "lint": "eslint --fix src --ext .ts --ext .tsx",
     "format": "pnpm exec prettier src/**/*.{ts,tsx} --write"
   },
   "devDependencies": {
     "@types/dompurify": "3.0.5",
+    "autoprefixer": "^10.4.20",
+    "cssnano": "^7.0.6",
+    "cssnano-preset-advanced": "^7.0.6",
     "dotenv": "16.3.1",
+    "postcss": "^8.4.45",
+    "tailwindcss": "^3.4.10",
     "vite": "5.0.5",
     "vite-plugin-compression": "^0.5.1",
     "vite-plugin-solid": "2.7.2"
@@ -24,8 +29,8 @@
     "@dfinity/ledger-icp": "^2.2",
     "@dfinity/ledger-icrc": "^2.3",
     "@dfinity/principal": "^2.0.0",
-    "@fort-major/msq-client": "^0.3",
-    "@fort-major/msq-shared": "^0.3.4",
+    "@fort-major/msq-client": "^0.3.22",
+    "@fort-major/msq-shared": "^0.3.5",
     "@solidjs/router": "0.13.3",
     "chart.js": "4.4.1",
     "dompurify": "3.0.6",

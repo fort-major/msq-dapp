@@ -36,7 +36,7 @@ export function LoginPage() {
       const loginOptions = await msq.getLoginOptions(getIcrc35Request()!.peerOrigin);
 
       setLoginOptions(loginOptions);
-    }),
+    })
   );
 
   const onLogin = async (loginOrigin: string, identityId: number) => {

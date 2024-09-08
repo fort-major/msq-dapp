@@ -1,4 +1,12 @@
-import { Principal, TAccountId, bytesToHex, debugStringify, tokensToStr, unreacheable } from "@fort-major/msq-shared";
+import {
+  IMSQPayResponse,
+  Principal,
+  TAccountId,
+  bytesToHex,
+  debugStringify,
+  tokensToStr,
+  unreacheable,
+} from "@fort-major/msq-shared";
 import { AccountCard } from "../../../../components/account-card";
 import { H3, H5, Text } from "../../../../ui-kit/typography";
 import {
@@ -32,8 +40,11 @@ import { IWallet } from "../../../../utils/wallets";
 import { ICRC1IDLFactory, ICRC1Token } from "../../../../utils/icrc-1";
 import { Actor } from "@dfinity/agent";
 import { useICRC35Store } from "../../../../store/icrc-35";
+import { TPaymentPageMode } from "..";
 
 export interface IPaymentCheckoutPageProps {
+  mode: TPaymentPageMode;
+
   accountId: TAccountId;
   accountName: string;
   accountBalance: bigint;
@@ -147,13 +158,28 @@ export function PaymentCheckoutPage() {
   };
 
   const handleCheckoutSuccess = (blockId: bigint) => {
-    getIcrc35Request()!.respond(blockId);
-    getIcrc35Request()!.closeConnection();
+    if (props?.mode === "icrc-1-icrc-35") {
+      getIcrc35Request()!.respond(blockId);
+      getIcrc35Request()!.closeConnection();
+    } else if (props?.mode === "msq-pay-icrc-35") {
+      const resp: IMSQPayResponse = {
+        blockIdx: blockId,
+        tokenId: props.assetId,
+      };
+
+      getIcrc35Request()!.respond(resp);
+      getIcrc35Request()!.closeConnection();
+    }
   };
 
   const handleCheckoutFail = () => {
-    getIcrc35Request()!.respond(undefined);
-    getIcrc35Request()!.closeConnection();
+    if (props?.mode === "icrc-1-icrc-35") {
+      getIcrc35Request()!.respond(undefined);
+      getIcrc35Request()!.closeConnection();
+    } else if (props?.mode === "msq-pay-icrc-35") {
+      getIcrc35Request()!.respond(null);
+      getIcrc35Request()!.closeConnection();
+    }
   };
 
   const handleCheckoutCancel = () => {

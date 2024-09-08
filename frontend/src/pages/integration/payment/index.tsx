@@ -1,287 +1,345 @@
-import { For, Match, Show, Switch, createEffect, createMemo, createSignal, on, onCleanup, onMount } from "solid-js";
-import { useMsqClient } from "../../../store/global";
-import { useLocation, useNavigate, useSearchParams } from "@solidjs/router";
-import { Principal } from "@dfinity/principal";
 import {
-  AccountCardBase,
-  AccountCardSelected,
-  PaymentPageAccounts,
-  PaymentPageAccountsWrapper,
-  PaymentPageButtons,
-  PaymentPageContainer,
-  PaymentPageContent,
-  PaymentPageHeading,
-  PaymentPageWrapper,
-} from "./style";
+  Match,
+  Show,
+  Switch,
+  batch,
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  on,
+  onCleanup,
+} from "solid-js";
+import { useNavigate, useSearchParams } from "@solidjs/router";
+import { Principal } from "@dfinity/principal";
+import { PaymentPageContainer, PaymentPageHeading, PaymentPageWrapper } from "./style";
 import { ColorAccent, H3, Text } from "../../../ui-kit/typography";
 import {
   ErrorCode,
   IICRC1TransferRequest,
+  IMSQPayRequest,
   TAccountId,
+  bytesToHex,
   delay,
   err,
   hexToBytes,
   originToHostname,
   tokensToStr,
 } from "@fort-major/msq-shared";
-import { AccountCard } from "../../../components/account-card";
-import { AddAccountBtn } from "../../../components/add-account-btn";
-import { Button, EButtonKind } from "../../../ui-kit/button";
-import { EIconKind } from "../../../ui-kit/icon";
 import { IReceivePopupProps, ReceivePopup } from "../../cabinet/my-assets/receive";
 import { IPaymentCheckoutPageProps } from "./checkout";
 import { useAssetData } from "../../../store/assets";
 import { ROOT } from "../../../routes";
 import { TThirdPartyWalletKind, useThirdPartyWallet } from "../../../store/wallets";
 import { useICRC35Store } from "../../../store/icrc-35";
-import { Block, Img } from "../../../components/markup";
-import { Plate } from "../../../components/plate";
-import { COLOR_GRAY_115, COLOR_GRAY_140, COLOR_GRAY_190, COLOR_ORANGE, COLOR_WHITE } from "../../../ui-kit";
-import { eventHandler } from "../../../utils";
-import { Checkbox } from "../../../ui-kit/checkbox";
-import { Warning } from "../../../ui-kit/warning";
-import { Copyable } from "../../../ui-kit/copyable";
+import { WalletSelector } from "../../../components/wallet-selector";
+import { PaymentAccountSelector } from "../../../components/account-selector";
+import { useMsqPay } from "../../../store/msq-pay";
+import { MSQ_PAY_PRINCIPAL } from "../../../backend";
+import { calcInvoiceMemo, nowNs } from "../../../utils";
+import { SupportedTokenSelector } from "../../../components/supported-token-selector";
+import { EDs } from "../../../utils/e8s";
+import { Shop } from "../../../components/shop";
 
-interface ITransferRequestSearchParams {
-  kind?: "t" | "d";
-  "canister-id": string;
-  "to-principal": string;
-  "to-subaccount"?: string;
-  memo?: string;
-  amount: string;
-}
-
-interface UrlBasedICRC1TransferRequest {
-  kind: "transfer" | "donation";
-  canisterId: string;
-  to: {
-    owner: string;
-    subaccount?: string;
-  };
-  memo?: string;
-  amount: bigint;
-}
+export type TPaymentPageMode = "msq-pay-icrc-35" | "msq-pay-url" | "icrc-1-icrc-35" | "icrc-1-url";
 
 export function PaymentPage() {
-  const [selectedAccountId, setSelectedAccountId] = createSignal<TAccountId>(0);
-  const [receivePopupProps, setReceivePopupProps] = createSignal<IReceivePopupProps | null>(null);
-  const [loading, setLoading] = createSignal(false);
-  const [refreshing, setRefreshing] = createSignal<boolean | undefined>(false);
-  const [pageState, setPageState] = createSignal<"account-select" | "wallet-select">("wallet-select");
-
-  const { assets, assetMetadata, fetchMetadata, fetchAccountInfo, refreshBalances, addAsset, addAccount } =
-    useAssetData();
+  const { assets, assetMetadata } = useAssetData();
   const { getIcrc35Request } = useICRC35Store();
   const navigate = useNavigate();
-  const { connectWallet, disconnectWallet, initWallet, connectedWallet, setWalletAccount } = useThirdPartyWallet();
+  const { initWallet, setWalletAccount } = useThirdPartyWallet();
+  const [searchParams] = useSearchParams();
+  const { invoices, fetchInvoice, shops, fetchShopById, msqUsdExchangeRates, shopSubaccounts, fetchShopSubaccount } =
+    useMsqPay();
 
-  const icrc35BasedPaymentRequest = () => getIcrc35Request<IICRC1TransferRequest>();
+  const [receivePopupProps, setReceivePopupProps] = createSignal<IReceivePopupProps | null>(null);
+  const [pageState, setPageState] = createSignal<"wallet-select" | "asset-select" | "account-select">("wallet-select");
+  const [assetId, setAssetId] = createSignal<Principal | undefined>();
+  const [amount, setAmount] = createSignal<EDs | undefined>();
 
-  const urlBasedPaymentRequest = createMemo(() => {
-    const [searchParams] = useSearchParams() as unknown as [ITransferRequestSearchParams];
+  const icrc35Icrc1PaymentRequest = createMemo(() => {
+    const req = getIcrc35Request<IICRC1TransferRequest>();
+
+    if (!req || !req.payload.canisterId) return undefined;
+
+    return req;
+  });
+  const icrc35MsqPaymentRequest = createMemo(() => {
+    const req = getIcrc35Request<IMSQPayRequest>();
+
+    if (!req || !req.payload.invoiceId) return undefined;
+
+    return req;
+  });
+
+  const urlIcrc1PaymentRequest = createMemo(() => {
     if (!searchParams["canister-id"] || !searchParams["to-principal"] || !searchParams["amount"]) return undefined;
 
-    // inputs are validated here or later for principals
-    const req: UrlBasedICRC1TransferRequest = {
-      kind: searchParams.kind === "d" ? "donation" : "transfer",
+    const req: IICRC1TransferRequest = {
       canisterId: searchParams["canister-id"],
       to: {
         owner: searchParams["to-principal"],
-        subaccount: searchParams["to-subaccount"],
+        subaccount: searchParams["to-subaccount"] ? hexToBytes(searchParams["to-subaccount"]) : undefined,
       },
-      memo: searchParams.memo,
+      memo: searchParams.memo ? hexToBytes(searchParams.memo) : undefined,
       amount: BigInt(searchParams.amount),
     };
 
     return req;
   });
 
-  const mode = (): "icrc-35" | "url" | undefined =>
-    getIcrc35Request() ? "icrc-35" : urlBasedPaymentRequest() ? "url" : undefined;
+  const urlMsqPaymentRequest = createMemo(() => {
+    if (!searchParams["invoice-id"]) return undefined;
 
-  const getAssetId = () => {
-    try {
-      switch (mode()) {
-        case "icrc-35":
-          return Principal.fromText(icrc35BasedPaymentRequest()!.payload.canisterId);
-        case "url":
-          return Principal.fromText(urlBasedPaymentRequest()!.canisterId);
-      }
-    } catch (e) {
-      console.error(e);
-      return undefined;
-    }
+    const invoiceId = hexToBytes(searchParams["invoice-id"]);
+
+    const req: IMSQPayRequest = {
+      invoiceId,
+    };
+
+    return req;
+  });
+
+  const icrc1TransferReq = createMemo(() => {
+    const icrc35 = icrc35Icrc1PaymentRequest();
+    if (icrc35) return icrc35.payload;
+
+    const url = urlIcrc1PaymentRequest();
+    if (url) return url;
+
+    return undefined;
+  });
+
+  const msqPayReq = createMemo(() => {
+    const icrc35 = icrc35MsqPaymentRequest();
+    if (icrc35) return icrc35.payload;
+
+    const url = urlMsqPaymentRequest();
+    if (url) return url;
+
+    return undefined;
+  });
+
+  const msqPayInvoice = () => {
+    const req = msqPayReq();
+    if (!req) return;
+
+    return invoices[bytesToHex(req.invoiceId)];
   };
 
-  const getKind = (): "payment" | "transfer" | "donation" | undefined => {
-    switch (mode()) {
-      case "icrc-35":
-        return "payment";
-      case "url":
-        return urlBasedPaymentRequest()!.kind;
-    }
+  const msqPayShop = () => {
+    const invoice = msqPayInvoice();
+    if (!invoice) return undefined;
+
+    return shops[invoice.shop_id.toString()];
   };
 
-  const getToPrincipal = () => {
-    try {
-      switch (mode()) {
-        case "icrc-35":
-          return Principal.fromText(icrc35BasedPaymentRequest()!.payload.to.owner);
-        case "url":
-          return Principal.fromText(urlBasedPaymentRequest()!.to.owner);
-      }
-    } catch {
-      return undefined;
-    }
+  createEffect(
+    on(msqPayInvoice, (inv) => {
+      if (!inv) return;
+      fetchShopSubaccount(inv.shop_id);
+    })
+  );
+
+  const msqPayShopSubaccount = () => {
+    const inv = msqPayInvoice();
+    if (!inv) return;
+
+    return shopSubaccounts[inv.shop_id.toString()];
   };
 
-  const getToSubaccount = () => {
-    switch (mode()) {
-      case "icrc-35":
-        return icrc35BasedPaymentRequest()!.payload.to.subaccount;
-      case "url":
-        return urlBasedPaymentRequest()!.to.subaccount
-          ? hexToBytes(urlBasedPaymentRequest()!.to.subaccount!)
-          : undefined;
-    }
-  };
+  const [msqPayInvoiceMemo] = createResource(msqPayInvoice, (inv) => calcInvoiceMemo(inv.id as Uint8Array));
 
-  const getMemo = () => {
-    switch (mode()) {
-      case "icrc-35":
-        return icrc35BasedPaymentRequest()!.payload.memo;
-      case "url":
-        return urlBasedPaymentRequest()!.memo ? hexToBytes(urlBasedPaymentRequest()!.memo!) : undefined;
-    }
-  };
+  const mode = (): TPaymentPageMode | undefined => {
+    if (urlMsqPaymentRequest()) return "msq-pay-url";
+    if (urlIcrc1PaymentRequest()) return "icrc-1-url";
+    if (icrc35MsqPaymentRequest()) return "msq-pay-icrc-35";
+    if (icrc35Icrc1PaymentRequest()) return "icrc-1-icrc-35";
 
-  const getAmount = () => {
-    let amount: bigint;
-
-    switch (mode()) {
-      case "icrc-35":
-        amount = icrc35BasedPaymentRequest()!.payload.amount;
-        break;
-      case "url":
-        amount = urlBasedPaymentRequest()!.amount;
-        break;
-
-      default:
-        amount = 0n;
-    }
-
-    if (amount > 0n) return amount;
     return undefined;
   };
 
-  const getMetadata = () => {
-    const assetId = getAssetId()?.toText();
-    if (!assetId) return undefined;
+  // for ICRC-1 flows, sets the assetId signal to what is set by the request
+  createEffect(
+    on(icrc1TransferReq, (req) => {
+      if (!req) return;
 
-    const metadata = assetMetadata[assetId];
-    if (!metadata) return undefined;
+      // TODO: handle this error
+      setAssetId(Principal.fromText(req.canisterId));
+    })
+  );
 
-    return metadata;
+  // for MSQ pay flows, fetches the invoice as soon as possible
+  createEffect(
+    on(msqPayReq, async (req) => {
+      if (req) {
+        await fetchInvoice(req.invoiceId);
+
+        const inv = msqPayInvoice();
+        if (!inv) {
+          navigate(ROOT["/"].error["/"]["invoice-not-found"].path);
+          return;
+        }
+      }
+    })
+  );
+
+  // for MSQ pay flows, fetches the shop info as soon as possible
+  createEffect(
+    on(msqPayInvoice, (invoice) => {
+      if (invoice) {
+        fetchShopById(invoice.shop_id);
+      }
+    })
+  );
+
+  createEffect(
+    on(assetId, async (a) => {
+      if (!a) return;
+
+      await initWallet([a.toText()]);
+    })
+  );
+
+  const getToPrincipal = () => {
+    const icrc1 = icrc1TransferReq();
+    if (icrc1) return Principal.fromText(icrc1.to.owner);
+
+    const invoice = msqPayInvoice();
+    if (!invoice) return undefined;
+
+    return MSQ_PAY_PRINCIPAL;
+  };
+
+  const getToSubaccount = () => {
+    const icrc1 = icrc1TransferReq();
+    if (icrc1) return icrc1.to.subaccount;
+
+    return msqPayShopSubaccount();
+  };
+
+  const getMemo = () => {
+    const icrc1 = icrc1TransferReq();
+    if (icrc1) return icrc1.memo;
+
+    return msqPayInvoiceMemo();
   };
 
   const getAmountToTransfer = () => {
-    const qty = getAmount();
+    const qty = amount();
     if (!qty) return undefined;
 
-    const meta = getMetadata();
-    if (!meta) return undefined;
+    const m = meta();
+    if (!m) return undefined;
 
-    return qty + meta.metadata.fee;
+    return qty.add(EDs.new(m.fee, m.decimals));
   };
 
   const getCreatedAt = () => {
-    switch (mode()) {
-      case "icrc-35":
-        return icrc35BasedPaymentRequest()!.payload.createdAt;
-      default:
-        return undefined;
-    }
+    const icrc1 = icrc1TransferReq();
+    if (icrc1) return icrc1.createdAt;
+
+    return nowNs();
   };
 
+  // returns true if at least some flow (MSQ Pay or ICRC1) is present
   const isValidRequest = () => {
-    console.log(getAssetId(), getToPrincipal(), getAmount(), icrc35BasedPaymentRequest(), urlBasedPaymentRequest());
+    const icrc1 = icrc1TransferReq();
+    if (icrc1 && icrc1.canisterId && icrc1.to && icrc1.amount) return true;
 
-    return getAssetId() !== undefined && getToPrincipal() !== undefined && getAmount() !== undefined;
+    const pay = msqPayReq();
+    if (pay && pay.invoiceId) return true;
+
+    return false;
   };
 
+  // if the request is invalid - show error page
+  createEffect(
+    on(isValidRequest, (is) => {
+      if (!is) {
+        navigate(ROOT["/"].error["/"]["bad-payment-request"].path);
+      }
+    })
+  );
+
+  // return an origin of the website who had initiated the payment request
   const getInitiatorOrigin = () => {
     switch (mode()) {
-      case "icrc-35":
-        return icrc35BasedPaymentRequest()!.peerOrigin;
-      case "url":
+      case "icrc-1-icrc-35":
+        return icrc35Icrc1PaymentRequest()!.peerOrigin;
+      case "msq-pay-icrc-35":
+        return icrc35MsqPaymentRequest()!.peerOrigin;
+      case "icrc-1-url":
+      case "msq-pay-url":
         return window.document.referrer ? new URL(window.document.referrer).origin : window.location.origin;
       default:
         return window.location.origin;
     }
   };
 
-  createEffect(
-    on(isValidRequest, async (isValid) => {
-      if (!isValid) {
-        navigate(ROOT["/"].error["/"]["bad-payment-request"].path);
-        return;
-      }
+  // return metadata of the chosen assetId
+  const meta = () => {
+    const a = assetId();
+    if (!a) return;
 
-      await fetchMetadata([getAssetId()!.toText()]);
-    }),
-  );
-
-  createEffect(
-    on(getAssetId, async (assetId) => {
-      if (!assetId) return;
-
-      if (connectedWalletIsThirdParty()) {
-        return;
-      }
-
-      const result = await fetchAccountInfo([assetId.toText()]);
-
-      // canister ID will be validated here
-      if (!result || !result[0]) {
-        err(ErrorCode.ICRC1_ERROR, "Token not found");
-      }
-
-      await refreshBalances!([assetId.toText()]);
-    }),
-  );
-
-  createEffect(async () => {
-    if (connectedWallet() && refreshing() === false) {
-      setRefreshing(true);
-
-      while (refreshing() !== undefined) {
-        await delay(2000);
-        await refreshBalances!([getAssetId()!.toText()]);
-      }
-    }
-  });
-
-  onCleanup(() => {
-    setRefreshing(undefined);
-  });
-
-  const handleAddAccount = async (assetId: string, assetName: string, symbol: string) => {
-    setLoading(true);
-    document.body.style.cursor = "wait";
-
-    await addAccount!(assetId, assetName, symbol);
-
-    document.body.style.cursor = "unset";
-    setLoading(false);
+    return assetMetadata[a.toText()]?.metadata;
   };
 
+  // sets the amount for ICRC-1 flow
+  createEffect(
+    on(meta, (m) => {
+      if (!m) return;
+
+      const icrc1 = icrc1TransferReq();
+      if (!icrc1) return;
+
+      setAmount(EDs.new(icrc1.amount, m.decimals));
+    })
+  );
+
+  // returns exchange rate for MSQ Pay flow
+  const exchangeRate = () => {
+    const m = meta();
+    if (!m) return undefined;
+
+    return msqUsdExchangeRates[m.symbol];
+  };
+
+  // when asset id is changed at MSQ Pay flow, calculate the amount
+  createEffect(() => {
+    const a = assetId();
+    if (!a) return;
+
+    const inv = msqPayInvoice();
+
+    console.log("invoice", inv);
+
+    if (!inv) return;
+
+    const rate = exchangeRate();
+
+    console.log("rate", rate);
+
+    if (!rate) return;
+
+    const m = meta();
+
+    console.log("meta", m);
+
+    if (!m) return;
+
+    const qty = inv.qty_usd.toDynamic().toDecimals(m.decimals).div(rate.toDynamic().toDecimals(m.decimals));
+
+    setAmount(qty);
+  });
+
   const handleReceive = (accountId: TAccountId) => {
-    const assetId = getAssetId()!.toText();
+    const a = assetId()!.toText();
 
     setReceivePopupProps({
-      assetId: assetId,
-      principal: assets[assetId]!.accounts[accountId].principal!,
-      symbol: assetMetadata[assetId]!.metadata!.symbol,
+      assetId: a,
+      principal: assets[a]!.accounts[accountId].principal!,
+      symbol: assetMetadata[a]!.metadata!.symbol,
       onClose: handleReceiveClose,
     });
   };
@@ -291,26 +349,28 @@ export function PaymentPage() {
   };
 
   const handleCheckoutStart = (accountId: TAccountId) => {
-    const assetId = getAssetId()!.toText();
-    setWalletAccount(assetId, accountId);
+    const a = assetId()!.toText();
+    setWalletAccount(a, accountId);
 
-    const asset = assets[assetId]!;
-    const { metadata } = assetMetadata[assetId]!;
+    const asset = assets[a]!;
+    const { metadata } = assetMetadata[a]!;
 
     const p: IPaymentCheckoutPageProps = {
+      mode: mode()!,
+
       accountId,
       accountName: asset.accounts[accountId].name,
       accountBalance: asset.accounts[accountId].balance!,
       accountPrincipal: asset.accounts[accountId].principal,
 
-      assetId,
+      assetId: a,
       symbol: metadata.symbol,
       decimals: metadata.decimals,
       fee: metadata.fee,
 
       peerOrigin: getInitiatorOrigin(),
 
-      amount: getAmount()!,
+      amount: amount()!.val,
       recepientPrincipal: getToPrincipal()!.toText(),
       recepientSubaccount: getToSubaccount(),
       memo: getMemo(),
@@ -320,207 +380,88 @@ export function PaymentPage() {
     navigate(ROOT["/"].integration["/"].pay["/"].checkout.path, { state: p });
   };
 
-  const handleWalletSelectBack = () => {
-    window.close();
+  const handleBack = () => {
+    switch (pageState()) {
+      case "wallet-select":
+        window.close();
+        break;
+      case "asset-select":
+        batch(() => {
+          setPageState("wallet-select");
+          setAssetId(undefined);
+          setAmount(undefined);
+        });
+        break;
+      case "account-select":
+        setPageState("asset-select");
+        break;
+    }
   };
 
-  const handleAccountSelectBack = () => {
-    disconnectWallet();
-    setPageState("wallet-select");
-  };
-
-  const handleConnectWallet = async (kind: TThirdPartyWalletKind) => {
-    await connectWallet(kind);
-    await initWallet([getAssetId()!.toText()]);
+  const handleConnectWallet = async (_kind: TThirdPartyWalletKind) => {
+    const a = assetId();
+    if (!a) {
+      setPageState("asset-select");
+      return;
+    }
 
     setPageState("account-select");
   };
 
-  const connectedWalletIsThirdParty = () => {
-    const connected = connectedWallet();
-
-    // not entirely true, but will work for now
-    if (!connected) return true;
-    const [kind, _] = connected;
-
-    return kind === "NNS" || kind === "Plug";
+  const handleAssetSelect = async (id: Principal) => {
+    setAssetId(id);
+    setPageState("account-select");
   };
-
-  const supportedWallets: ["MSQ", "Plug", "NNS"] = ["MSQ", "Plug", "NNS"];
 
   return (
     <Show when={isValidRequest()}>
       <PaymentPageContainer>
-        <PaymentPageWrapper>
-          <PaymentPageHeading>
+        <div class="w-full max-w-[880px] flex flex-col gap-10">
+          <div class="flex flex-col gap-4">
             <Text size={20} weight={600}>
-              Pending {getKind()} request{" "}
+              Pending payment request{" "}
               <Show when={getInitiatorOrigin()}>
                 initiated by <span class={ColorAccent}>{originToHostname(getInitiatorOrigin()!)}</span>
               </Show>
             </Text>
-            <Show when={getAssetId() && assetMetadata[getAssetId()!.toText()]?.metadata}>
+
+            <Show when={!msqPayInvoice() && meta() && amount()}>
               <H3>
-                {tokensToStr(getAmount()!, assetMetadata[getAssetId()!.toText()]!.metadata!.decimals, undefined, true)}{" "}
-                {assetMetadata[getAssetId()!.toText()]!.metadata!.symbol}
+                {amount()!.toString()} {meta()!.symbol}
               </H3>
             </Show>
-          </PaymentPageHeading>
+            <Show when={msqPayInvoice()}>
+              <H3>${msqPayInvoice()!.qty_usd.toString()}</H3>
+            </Show>
+          </div>
 
-          <Show when={pageState() === "wallet-select"}>
-            <Block gap="40px" flow="column" items="stretch">
-              <Block gap="25px" flow="column" items="stretch">
-                <Text size={20} weight={600}>
-                  Select a wallet to pay with:
-                </Text>
-                <Block flow="column" items="stretch">
-                  <For each={supportedWallets}>
-                    {(walletName) => (
-                      <Plate pointer bgHover onClick={eventHandler(() => handleConnectWallet(walletName))}>
-                        <Block gap="15px" items="center">
-                          <Img src={`/assets/${walletName.toLowerCase()}-wallet.png`} w="50px" h="50px" rounded />
-                          <Block flow="column" gap="15px">
-                            <Text size={16} weight={600} color={COLOR_WHITE}>
-                              {walletName}
-                            </Text>
-                            <Text size={12} weight={500} color={COLOR_GRAY_140}>
-                              <Switch>
-                                <Match when={walletName === "MSQ"}>MetaMask-based Safe ICP Wallet</Match>
-                                <Match when={walletName === "NNS"}>Use Internet Identity to pay via the NNS dapp</Match>
-                                <Match when={walletName === "Plug"}>IC Wallet by Funded</Match>
-                              </Switch>
-                            </Text>
-                          </Block>
-                        </Block>
-                      </Plate>
-                    )}
-                  </For>
-                </Block>
-              </Block>
-              <Button kind={EButtonKind.Additional} text="Dismiss" label="dismiss" onClick={handleWalletSelectBack} />
-            </Block>
+          <Show when={msqPayShop()}>
+            <Shop
+              id={msqPayShop()!.id}
+              name={msqPayShop()!.name}
+              description={msqPayShop()!.description}
+              iconSrc={msqPayShop()!.icon_base64}
+            />
           </Show>
 
-          <Show
-            when={
-              pageState() === "account-select" &&
-              connectedWallet() &&
-              assets[getAssetId()!.toText()]?.accounts &&
-              assetMetadata[getAssetId()!.toText()]?.metadata
-            }
-          >
-            <PaymentPageContent>
-              <Text size={20} weight={600}>
-                <Switch>
-                  <Match when={connectedWallet()![0] === "MSQ"}>Select an account to continue:</Match>
-                  <Match when={connectedWallet()![0] === "NNS"}>
-                    Refill with{" "}
-                    <a href="https://nns.ic0.app" style={{ "text-decoration": "underline" }} class={ColorAccent}>
-                      NNS Dapp
-                    </a>{" "}
-                    (or other) to continue:
-                  </Match>
-                </Switch>
-              </Text>
-              <PaymentPageAccountsWrapper>
-                <PaymentPageAccounts grid={connectedWallet()![0] === "MSQ"}>
-                  <For each={assets[getAssetId()!.toText()]?.accounts}>
-                    {(account, idx) => (
-                      <AccountCard
-                        fullWidth
-                        showWalletKindLogo={connectedWallet()![0]}
-                        classList={{ [AccountCardBase]: true, [AccountCardSelected]: idx() === selectedAccountId() }}
-                        onClick={(accountId) => setSelectedAccountId(accountId)}
-                        accountId={idx()}
-                        assetId={getAssetId()!.toText()}
-                        name={account.name}
-                        balance={account.balance}
-                        principal={account.principal}
-                        decimals={assetMetadata[getAssetId()!.toText()]!.metadata!.decimals}
-                        symbol={assetMetadata[getAssetId()!.toText()]!.metadata!.symbol}
-                        targetBalance={getAmount()! + assetMetadata[getAssetId()!.toText()]!.metadata!.fee}
-                      />
-                    )}
-                  </For>
-                </PaymentPageAccounts>
-                <Show when={connectedWallet()![0] === "NNS" && getAmountToTransfer() !== undefined}>
-                  <Block flow="column" items="stretch">
-                    <Warning iconBgColor={COLOR_GRAY_190}>
-                      <Block gap="5px" items="center">
-                        <Text weight={500} size={16}>
-                          Mare sure to transfer exactly
-                        </Text>
-                        <Copyable
-                          text={tokensToStr(getAmountToTransfer()!, getMetadata()!.metadata.decimals)}
-                          after={getMetadata()!.metadata.symbol}
-                        />
-                        <Text weight={500} size={16}>
-                          , otherwise you won't be able to complete the payment.
-                        </Text>
-                      </Block>
-                    </Warning>
-                    <Warning iconBgColor={COLOR_ORANGE}>
-                      <Block gap="5px" items="center">
-                        <Text weight={500} size={16}>
-                          Make sure your wallet supports ICRC-1 transfers, otherwise your funds may be lost.
-                        </Text>
-                      </Block>
-                    </Warning>
-                  </Block>
-                </Show>
-                <Show when={!connectedWalletIsThirdParty()}>
-                  <AddAccountBtn
-                    disabled={loading()}
-                    loading={loading()}
-                    symbol={assetMetadata[getAssetId()!.toText()]!.metadata!.symbol}
-                    onClick={() =>
-                      handleAddAccount(
-                        getAssetId()!.toText(),
-                        assetMetadata[getAssetId()!.toText()]!.metadata!.name,
-                        assetMetadata[getAssetId()!.toText()]!.metadata!.symbol,
-                      )
-                    }
-                  />
-                </Show>
-              </PaymentPageAccountsWrapper>
-              <PaymentPageButtons>
-                <Button
-                  label="dismiss"
-                  kind={EButtonKind.Additional}
-                  onClick={handleAccountSelectBack}
-                  text="Dismiss"
-                  fullWidth
-                />
-                <Show
-                  when={
-                    (assets[getAssetId()!.toText()]!.accounts[selectedAccountId()].balance || 0n) >=
-                    getAmount()! + assetMetadata[getAssetId()!.toText()]!.metadata!.fee
-                  }
-                  fallback={
-                    <Button
-                      label="top up the balance"
-                      kind={EButtonKind.Secondary}
-                      text="Top up the Balance"
-                      icon={EIconKind.ArrowLeftDown}
-                      onClick={() => handleReceive(selectedAccountId())}
-                      disabled={assets[getAssetId()!.toText()]!.accounts[selectedAccountId()].principal === undefined}
-                      fullWidth
-                    />
-                  }
-                >
-                  <Button
-                    label="go to checkout"
-                    kind={EButtonKind.Primary}
-                    text="Go to Checkout"
-                    icon={EIconKind.ArrowRightUp}
-                    fullWidth
-                    onClick={() => handleCheckoutStart(selectedAccountId())}
-                  />
-                </Show>
-              </PaymentPageButtons>
-            </PaymentPageContent>
-          </Show>
-        </PaymentPageWrapper>
+          <Switch>
+            <Match when={pageState() === "wallet-select"}>
+              <WalletSelector onConnect={handleConnectWallet} onDismiss={handleBack} />
+            </Match>
+            <Match when={pageState() === "asset-select"}>
+              <SupportedTokenSelector onSelect={handleAssetSelect} onDismiss={handleBack} />
+            </Match>
+            <Match when={pageState() === "account-select"}>
+              <PaymentAccountSelector
+                assetId={assetId()!}
+                amountPlusFee={getAmountToTransfer()}
+                onDismissClick={handleBack}
+                onReceiveClick={handleReceive}
+                onContinueClick={handleCheckoutStart}
+              />
+            </Match>
+          </Switch>
+        </div>
         <Show when={receivePopupProps()}>
           <ReceivePopup {...receivePopupProps()!} />
         </Show>

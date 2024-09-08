@@ -21,9 +21,9 @@ export const Block = styled.div<{
   gap: ${(props) => props.gap ?? "20px"};
   padding: ${(props) => props.p ?? "0"};
   border-radius: ${(props) => props.rounded ?? "0"};
-  background: ${(props) => props.bg ?? ""};
-  width: ${(props) => props.w ?? ""};
-  height: ${(props) => props.h ?? ""};
+  background: ${(props) => props.bg ?? "unset"};
+  width: ${(props) => props.w ?? "unset"};
+  height: ${(props) => props.h ?? "unset"};
   ${(props) => (props.pointer ? "cursor: pointer;" : "")};
 `;
 
